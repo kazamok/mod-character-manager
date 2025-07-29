@@ -24,6 +24,7 @@
 #include "ScriptMgr.h"
 #include "Config.h"
 #include "World.h"
+#include "WorldSession.h"
 #include "WorldSessionMgr.h"
 #include <time.h>
 
@@ -51,10 +52,11 @@ void CharacterManager::LoadConfig()
 
 namespace
 {
-    class ModCharacterManagerScript : public AccountScript
+    // This script handles the character creation attempts.
+    class ModCharacterManagerAccountScript : public AccountScript
     {
     public:
-        ModCharacterManagerScript() : AccountScript("ModCharacterManagerScript") { }
+        ModCharacterManagerAccountScript() : AccountScript("ModCharacterManagerAccountScript") { }
 
         bool CanAccountCreateCharacter(uint32 accountId, uint8 /*race*/, uint8 /*class_*/) override
         {
@@ -63,30 +65,15 @@ namespace
                 return true;
             }
 
-            if (WorldSession* session = sWorldSessionMgr->FindSession(accountId))
+            WorldSession* session = sWorldSessionMgr->FindSession(accountId);
+            if (!session)
             {
-                QueryResult charResult = CharacterDatabase.Query("SELECT guid FROM characters WHERE account = {}", accountId);
-                uint32 charCount = charResult ? charResult->GetRowCount() : 0;
-                uint32 maxChars = sCharacterManager->GetMaxCharacters();
+                return false; // Failsafe: If no session, block creation.
+            }
 
-                if (charCount < maxChars)
-                {
-                    ChatHandler(session).PSendSysMessage(35501, maxChars - charCount);
-                    return true;
-                }
-
-                // At character limit, check cooldown
-                QueryResult cooldownResult = LoginDatabase.Query("SELECT limit_hit_timestamp FROM account_character_limit WHERE accountId = {}", accountId);
-
-                if (!cooldownResult)
-                {
-                    // First time hitting the limit
-                    LoginDatabase.Execute("INSERT INTO account_character_limit (accountId, limit_hit_timestamp) VALUES ({}, NOW())", accountId);
-                    ChatHandler(session).PSendSysMessage(35502, sCharacterManager->GetCooldownDays());
-                    session->SendCharCreate(CHAR_CREATE_ERROR);
-                    return false;
-                }
-
+            // Check if a cooldown is already active for this account.
+            if (QueryResult cooldownResult = LoginDatabase.Query("SELECT limit_hit_timestamp FROM account_character_limit WHERE accountId = {}", accountId))
+            {
                 Field* fields = cooldownResult->Fetch();
                 time_t limitHitTimestamp = fields[0].Get<time_t>();
                 time_t now = time(nullptr);
@@ -94,18 +81,66 @@ namespace
 
                 if (now < cooldownEnd)
                 {
-                    // Still in cooldown
+                    // Cooldown is active and not expired, block creation.
                     uint32 remainingDays = (cooldownEnd - now) / DAY + 1;
                     ChatHandler(session).PSendSysMessage(35502, remainingDays);
                     session->SendCharCreate(CHAR_CREATE_ERROR);
                     return false;
                 }
+                else
+                {
+                    // Cooldown has expired, remove the record from the database.
+                    LoginDatabase.Execute("DELETE FROM account_character_limit WHERE accountId = {}", accountId);
+                }
+            }
 
-                // Cooldown finished, allow creation and reset the timestamp
-                LoginDatabase.Execute("UPDATE account_character_limit SET limit_hit_timestamp = NOW() WHERE accountId = {}", accountId);
+            // If not in cooldown, allow creation. OnPlayerCreate will handle starting cooldown if limit is reached.
+            // We still send the message about remaining slots if any.
+            QueryResult charResult = CharacterDatabase.Query("SELECT guid FROM characters WHERE account = {}", accountId);
+            uint32 charCount = charResult ? charResult->GetRowCount() : 0;
+            uint32 maxChars = sCharacterManager->GetMaxCharacters();
+
+            if (charCount < maxChars)
+            {
+                ChatHandler(session).PSendSysMessage(35501, maxChars - charCount);
             }
 
             return true;
+        }
+    };
+
+    // This script handles the character creation event to start the cooldown.
+    class ModCharacterManagerPlayerScript : public PlayerScript
+    {
+    public:
+        ModCharacterManagerPlayerScript() : PlayerScript("ModCharacterManagerPlayerScript") { }
+
+        void OnPlayerCreate(Player* player) override
+        {
+            if (!sCharacterManager->IsEnabled())
+            {
+                return;
+            }
+
+            uint32 accountId = player->GetSession()->GetAccountId();
+
+            // Get the actual current character count for this account.
+            QueryResult charResult = CharacterDatabase.Query("SELECT guid FROM characters WHERE account = {}", accountId);
+            uint32 charCount = charResult ? charResult->GetRowCount() : 0;
+            uint32 maxChars = sCharacterManager->GetMaxCharacters();
+
+            // If the account has reached or exceeded the maximum character limit, start the cooldown.
+            if (charCount >= maxChars)
+            {
+                LoginDatabase.Execute("REPLACE INTO account_character_limit (accountId, limit_hit_timestamp) VALUES ({}, NOW())", accountId);
+            }
+        }
+
+        // OnPlayerDelete is not used for starting cooldown, as OnPlayerCreate handles it.
+        // The cooldown record will persist until CanAccountCreateCharacter clears it.
+        void OnPlayerDelete(ObjectGuid /*guid*/, uint32 /*accountId*/) override
+        {
+            // No action needed here for cooldown logic.
         }
     };
 }
@@ -113,5 +148,7 @@ namespace
 void Addmod_character_managerScripts()
 {
     sCharacterManager->LoadConfig();
-    new ModCharacterManagerScript();
+    new ModCharacterManagerAccountScript();
+    new ModCharacterManagerPlayerScript();
 }
+
