@@ -1,0 +1,24 @@
+################################################################################
+#
+#   mod-character-manager
+#
+#   캐릭터 생성 관리 모듈 설정
+#
+################################################################################
+
+[mod_character_manager]
+
+# CharacterCreationLimit.Enabled
+# 기본값: 1 (0 = 비활성, 1 = 활성)
+# 캐릭터 생성 제한 기능의 활성화 여부를 설정합니다.
+CharacterCreationLimit.Enabled = 1
+
+# CharacterCreationLimit.MaxChars
+# 기본값: 10
+# 계정당 생성할 수 있는 최대 캐릭터 수를 설정합니다.
+CharacterCreationLimit.MaxChars = 10
+
+# CharacterCreationLimit.CooldownDays
+# 기본값: 5
+# 최대 캐릭터 수에 도달했을 때, 추가 생성을 위해 대기해야 하는 일수를 설정합니다.
+CharacterCreationLimit.CooldownDays = 5
