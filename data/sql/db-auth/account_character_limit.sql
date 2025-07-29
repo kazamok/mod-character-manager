@@ -1,3 +1,5 @@
+-- filename: account_character_limit.sql
+
 CREATE TABLE IF NOT EXISTS `account_character_limit` (
   `accountId` INT(10) UNSIGNED NOT NULL,
   `limit_hit_timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
