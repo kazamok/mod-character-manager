@@ -26,6 +26,7 @@
 #include "World.h"
 #include "WorldSession.h"
 #include "WorldSessionMgr.h"
+#include "Mail.h"
 #include <time.h>
 
 CharacterManager::CharacterManager() : _enabled(false), _maxChars(10), _cooldownDays(5) { }
@@ -132,7 +133,18 @@ namespace
             // If the account has reached or exceeded the maximum character limit, start the cooldown.
             if (charCount >= maxChars)
             {
-                LoginDatabase.Execute("REPLACE INTO account_character_limit (accountId, limit_hit_timestamp) VALUES ({}, NOW())", accountId);
+                LoginDatabase.Execute("REPLACE INTO account_character_limit (accountId, limit_hit_timestamp) VALUES ({}, UNIX_TIMESTAMP())", accountId);
+
+                // Send in-game mail to the player
+                std::string subject = "캐릭터 생성 제한 안내";
+                std::string body = "총 생성 가능한 캐릭터 수는 삭제된 캐릭터를 포함하여 총 " + std::to_string(sCharacterManager->GetMaxCharacters()) + "개 입니다.\n";
+                body += "생성 가능한 캐릭터 수를 초과하여 새로운 캐릭터를 생성할 수 없습니다.\n";
+                body += "추가 생성이 가능한 시기는 " + std::to_string(sCharacterManager->GetCooldownDays()) + "일 후 입니다.";
+
+                MailDraft draft(subject, body);
+                SQLTransaction trans = CharacterDatabase.BeginTransaction();
+                draft.SendMailTo(trans, MailReceiver(player), MailSender(MAIL_NORMAL, 0), MAIL_CHECK_MASK_HAS_BODY);
+                CharacterDatabase.CommitTransaction(trans);
             }
         }
 
