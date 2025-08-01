@@ -1,7 +1,5 @@
 -- filename: acore_string.sql
 
--- filename: acore_string.sql
-
 DELETE FROM `acore_string` WHERE `entry` IN (35501, 35502);
 
 INSERT INTO `acore_string` (`entry`, `content_default`, `locale_koKR`) VALUES
