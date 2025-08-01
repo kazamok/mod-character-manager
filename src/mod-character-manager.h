@@ -32,6 +32,7 @@ public:
     static CharacterManager* instance();
 
     bool IsEnabled() const { return _enabled; }
+    bool IsAccessControlEnabled() const { return _accessControlEnabled; }
     uint32 GetMaxCharacters() const { return _maxChars; }
     uint32 GetCooldownDays() const { return _cooldownDays; }
 
@@ -42,6 +43,7 @@ private:
     ~CharacterManager();
 
     bool _enabled;
+    bool _accessControlEnabled;
     uint32 _maxChars;
     uint32 _cooldownDays;
 };

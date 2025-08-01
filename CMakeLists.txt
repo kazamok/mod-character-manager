@@ -16,6 +16,7 @@ set(MOD_CHARACTER_MANAGER_SOURCES
 # Define the SQL scripts
 set(MOD_CHARACTER_MANAGER_SQL_DB_AUTH
     data/sql/db-auth/account_character_limit.sql
+    data/sql/db-auth/logondb.sql
 )
 
 set(MOD_CHARACTER_MANAGER_SQL_DB_WORLD

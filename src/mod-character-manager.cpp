@@ -29,7 +29,7 @@
 #include "Mail.h"
 #include <time.h>
 
-CharacterManager::CharacterManager() : _enabled(false), _maxChars(10), _cooldownDays(5) { }
+CharacterManager::CharacterManager() : _enabled(false), _accessControlEnabled(false), _maxChars(10), _cooldownDays(5) { }
 
 CharacterManager::~CharacterManager() { }
 
@@ -47,6 +47,7 @@ void CharacterManager::LoadConfig()
     }
 
     _enabled = sConfigMgr->GetOption<bool>("CharacterCreationLimit.Enabled", false, "mod_character_manager");
+    _accessControlEnabled = sConfigMgr->GetOption<bool>("mod_character_manager.AccessControl.Enabled", false, "mod_character_manager");
     _maxChars = sConfigMgr->GetOption<uint32>("CharacterCreationLimit.MaxChars", 10, "mod_character_manager");
     _cooldownDays = sConfigMgr->GetOption<uint32>("CharacterCreationLimit.CooldownDays", 5, "mod_character_manager");
 }
@@ -61,15 +62,36 @@ namespace
 
         bool CanAccountCreateCharacter(uint32 accountId, uint8 /*race*/, uint8 /*class_*/) override
         {
-            if (!sCharacterManager->IsEnabled())
-            {
-                return true;
-            }
-
             WorldSession* session = sWorldSessionMgr->FindSession(accountId);
             if (!session)
             {
                 return false; // Failsafe: If no session, block creation.
+            }
+
+            if (sCharacterManager->IsAccessControlEnabled())
+            {
+                if (QueryResult accessResult = LoginDatabase.Query("SELECT access_level FROM account_character_access WHERE accountId = {}", accountId))
+                {
+                    Field* fields = accessResult->Fetch();
+                    uint8 accessLevel = fields[0].Get<uint8>();
+
+                    if (accessLevel == 2) // Blacklisted
+                    {
+                        ChatHandler(session).PSendSysMessage(35503); // Custom message for blacklist
+                        session->SendCharCreate(CHAR_CREATE_ERROR);
+                        return false;
+                    }
+                    
+                    if (accessLevel == 1) // Whitelisted
+                    {
+                        return true; // Bypass all other checks
+                    }
+                }
+            }
+
+            if (!sCharacterManager->IsEnabled())
+            {
+                return true;
             }
 
             // Check if a cooldown is already active for this account.
