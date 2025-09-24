@@ -9,11 +9,12 @@ CREATE TABLE `account_character_access` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Account Character Creation Access Control';
 
 --
--- Whitelist GM accounts (ID 1-20)
+-- Whitelist GM accounts (ID 1-19) id 20 : test id
 --
 INSERT INTO `account_character_access` (`accountId`, `access_level`) VALUES
 (1, 1), (2, 1), (3, 1), (4, 1), (5, 1),
 (6, 1), (7, 1), (8, 1), (9, 1), (10, 1),
 (11, 1), (12, 1), (13, 1), (14, 1), (15, 1),
-(16, 1), (17, 1), (18, 1), (19, 1), (20, 1)
+(16, 1), (17, 1), (18, 1), (19, 1)
+
 ON DUPLICATE KEY UPDATE `access_level`=VALUES(`access_level`);
